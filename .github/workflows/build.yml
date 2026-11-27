@@ -29,7 +29,7 @@ jobs:
         run: |
           set -o pipefail
           {
-            pip install ziglang
+            pip install --break-system-packages ziglang
             Z="$(python3 -c 'import ziglang,os;print(os.path.dirname(ziglang.__file__))')/zig"
             git clone --depth 1 https://github.com/quickjs-ng/quickjs.git /tmp/qjs
             mkdir -p /tmp/zigbin
@@ -69,10 +69,16 @@ jobs:
 
       - name: Collect test log
         if: always()
+        shell: bash {0}
         run: |
-          { echo "=== logcat ==="; cat test-log.txt 2>/dev/null; echo; echo "=== gradle (tail) ==="; tail -60 gradle-test.txt 2>/dev/null; echo "=== qjs build (tail) ==="; tail -40 qjs-build.txt 2>/dev/null; } > VideoDL-test-log.txt
-          [ -f test-failed ] && echo "RESULT: FAILED" >> VideoDL-test-log.txt || echo "RESULT: PASSED" >> VideoDL-test-log.txt
+          {
+            echo "=== logcat ==="; cat test-log.txt
+            echo; echo "=== gradle (tail) ==="; tail -80 gradle-test.txt
+            echo; echo "=== qjs build (tail) ==="; tail -40 qjs-build.txt
+          } > VideoDL-test-log.txt 2>&1
+          if [ -f test-failed ] || [ ! -f test-log.txt ]; then echo "RESULT: FAILED" >> VideoDL-test-log.txt; else echo "RESULT: PASSED" >> VideoDL-test-log.txt; fi
           tail -5 VideoDL-test-log.txt
+          exit 0
 
       - name: Publish test log
         if: always()
@@ -84,7 +90,7 @@ jobs:
           files: VideoDL-test-log.txt
 
       - name: Fail if test failed
-        run: '[ ! -f test-failed ]'
+        run: '[ ! -f test-failed ] && [ -f test-log.txt ]'
 
       # 테스트 통과했을 때만 폰용 APK 빌드/배포
       - name: Build phone APK
