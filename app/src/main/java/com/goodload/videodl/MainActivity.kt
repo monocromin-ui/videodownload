@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var progress: ProgressBar
     private lateinit var status: TextView
 
+    @Volatile private var lastLog = ""
     @Volatile private var ready = false
     @Volatile private var busy = false
     private var pendingUrl: String? = null
@@ -43,6 +44,11 @@ class MainActivity : Activity() {
         status = findViewById(R.id.status)
 
         downloadBtn.setOnClickListener { startDownload(urlInput.text.toString()) }
+        findViewById<Button>(R.id.copyLog).setOnClickListener {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("VideoDL log", lastLog.ifEmpty { status.text }))
+            toast("로그를 복사했어요")
+        }
         downloadBtn.isEnabled = false
         status.text = "준비 중… (처음 실행은 30초 정도 걸려요)"
 
@@ -104,6 +110,7 @@ class MainActivity : Activity() {
                 req.addOption("--force-ipv4")
                 req.addOption("--retries", "3")
                 req.addOption("--fragment-retries", "3")
+                req.addOption("--verbose")
                 if (audio) {
                     req.addOption("-x")
                     req.addOption("--audio-format", "mp3")
@@ -126,7 +133,11 @@ class MainActivity : Activity() {
                     else "완료! 내 파일 > 다운로드 > VideoDL\n\n" + saved.joinToString("\n")
                 }
             } catch (e: Exception) {
-                ui { status.text = "실패: ${e.message}" }
+                val log = e.message ?: e.toString()
+                lastLog = log + "\n\n" + dnsCheck(log)
+                val tail = lastLog.lines().filter { !it.startsWith("[debug] ") || "Invoking" in it || "Request Handlers" in it }
+                    .takeLast(25).joinToString("\n")
+                ui { status.text = "실패 (아래 '로그 복사' 눌러서 보내주세요)\n\n$tail" }
             } finally {
                 dir.deleteRecursively()
                 busy = false
@@ -152,6 +163,25 @@ class MainActivity : Activity() {
             ?: throw Exception("저장 위치를 만들 수 없어요")
         contentResolver.openOutputStream(uri)!!.use { out -> f.inputStream().use { it.copyTo(out) } }
         return f.name
+    }
+
+    /** 로그에 나온 서버 주소를 안드로이드 시스템 DNS로 직접 조회해서 결과를 붙임 */
+    private fun dnsCheck(log: String): String {
+        val hosts = Regex("https?://([A-Za-z0-9.-]+)").findAll(log).map { it.groupValues[1] }
+            .filter { "googlevideo" in it || "youtube" in it }.distinct().take(5).toList()
+        val net = try {
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val lp = cm.getLinkProperties(cm.activeNetwork)
+            "DNS 서버: ${lp?.dnsServers?.joinToString { it.hostAddress ?: "" }}, 개인DNS: ${lp?.privateDnsServerName ?: (if (lp?.isPrivateDnsActive == true) "자동" else "꺼짐")}"
+        } catch (e: Exception) { "네트워크 정보 없음" }
+        val sb = StringBuilder("==== 진단 ====\n$net\n")
+        for (h in hosts) {
+            sb.append(h).append(" -> ")
+            try { sb.append(java.net.InetAddress.getAllByName(h).joinToString { it.hostAddress ?: "" }) }
+            catch (e: Exception) { sb.append("조회 실패: ${e.message}") }
+            sb.append("\n")
+        }
+        return sb.toString()
     }
 
     private fun ui(block: () -> Unit) = runOnUiThread { block() }
