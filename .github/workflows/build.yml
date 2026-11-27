@@ -23,20 +23,30 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      # QuickJS-NG (JS 엔진)를 안드로이드용으로 빌드 → 앱에 libqjs.so 로 포함
-      - name: Build QuickJS for Android
+      # QuickJS-NG (JS 엔진)를 정적 바이너리로 빌드 → 앱에 libqjs.so 로 포함
+      - name: Build QuickJS (static, zig)
+        shell: bash
         run: |
-          git clone --depth 1 https://github.com/quickjs-ng/quickjs.git /tmp/qjs
-          NDK=$ANDROID_NDK_LATEST_HOME
-          for ABI in arm64-v8a x86_64; do
-            cmake -S /tmp/qjs -B /tmp/qjs-$ABI -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
-              -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-29
-            cmake --build /tmp/qjs-$ABI --target qjs -j4
-            mkdir -p app/src/main/jniLibs/$ABI
-            cp /tmp/qjs-$ABI/qjs app/src/main/jniLibs/$ABI/libqjs.so
-          done
-          ls -la app/src/main/jniLibs/*
+          set -o pipefail
+          {
+            pip install ziglang
+            Z="$(python3 -c 'import ziglang,os;print(os.path.dirname(ziglang.__file__))')/zig"
+            git clone --depth 1 https://github.com/quickjs-ng/quickjs.git /tmp/qjs
+            mkdir -p /tmp/zigbin
+            for T in aarch64:arm64-v8a x86_64:x86_64; do
+              ARCH=${T%%:*}; ABI=${T##*:}
+              printf '#!/bin/sh\nexec %s cc -target %s-linux-musl "$@"\n' "$Z" "$ARCH" > /tmp/zigbin/cc-$ARCH
+              chmod +x /tmp/zigbin/cc-$ARCH
+              cmake -S /tmp/qjs -B /tmp/qjs-$ARCH -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=/tmp/zigbin/cc-$ARCH -DCMAKE_SYSTEM_NAME=Linux \
+                -DCMAKE_SYSTEM_PROCESSOR=$ARCH -DCMAKE_EXE_LINKER_FLAGS=-static
+              cmake --build /tmp/qjs-$ARCH --target qjs -j4
+              mkdir -p app/src/main/jniLibs/$ABI
+              cp /tmp/qjs-$ARCH/qjs app/src/main/jniLibs/$ABI/libqjs.so
+              file app/src/main/jniLibs/$ABI/libqjs.so
+            done
+            app/src/main/jniLibs/x86_64/libqjs.so -e 'console.log("qjs ok", 1+2)'
+          } 2>&1 | tee qjs-build.txt | tail -40
 
       - name: Enable KVM
         run: |
@@ -60,7 +70,7 @@ jobs:
       - name: Collect test log
         if: always()
         run: |
-          { echo "=== logcat ==="; cat test-log.txt 2>/dev/null; echo; echo "=== gradle (tail) ==="; tail -60 gradle-test.txt 2>/dev/null; } > VideoDL-test-log.txt
+          { echo "=== logcat ==="; cat test-log.txt 2>/dev/null; echo; echo "=== gradle (tail) ==="; tail -60 gradle-test.txt 2>/dev/null; echo "=== qjs build (tail) ==="; tail -40 qjs-build.txt 2>/dev/null; } > VideoDL-test-log.txt
           [ -f test-failed ] && echo "RESULT: FAILED" >> VideoDL-test-log.txt || echo "RESULT: PASSED" >> VideoDL-test-log.txt
           tail -5 VideoDL-test-log.txt
 
