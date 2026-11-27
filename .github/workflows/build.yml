@@ -1,4 +1,4 @@
-name: Build APK
+name: Build & Test APK
 
 on:
   push:
@@ -10,6 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -22,20 +23,68 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+      # QuickJS-NG (JS 엔진)를 안드로이드용으로 빌드 → 앱에 libqjs.so 로 포함
+      - name: Build QuickJS for Android
+        run: |
+          git clone --depth 1 https://github.com/quickjs-ng/quickjs.git /tmp/qjs
+          NDK=$ANDROID_NDK_LATEST_HOME
+          for ABI in arm64-v8a x86_64; do
+            cmake -S /tmp/qjs -B /tmp/qjs-$ABI -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-29
+            cmake --build /tmp/qjs-$ABI --target qjs -j4
+            mkdir -p app/src/main/jniLibs/$ABI
+            cp /tmp/qjs-$ABI/qjs app/src/main/jniLibs/$ABI/libqjs.so
+          done
+          ls -la app/src/main/jniLibs/*
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk VideoDL.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
-      - uses: actions/upload-artifact@v4
+      # 에뮬레이터에서 샘플 영상 실제 다운로드 테스트
+      - name: Download test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
         with:
-          name: VideoDL-apk
-          path: VideoDL.apk
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            adb logcat -c
+            gradle connectedDebugAndroidTest -Pemu=true --no-daemon > gradle-test.txt 2>&1 || touch test-failed
+            adb logcat -d -s VideoDLTest:* > test-log.txt || true
 
-      # 폰에서 바로 받을 수 있게 Releases 에 올림
+      - name: Collect test log
+        if: always()
+        run: |
+          { echo "=== logcat ==="; cat test-log.txt 2>/dev/null; echo; echo "=== gradle (tail) ==="; tail -60 gradle-test.txt 2>/dev/null; } > VideoDL-test-log.txt
+          [ -f test-failed ] && echo "RESULT: FAILED" >> VideoDL-test-log.txt || echo "RESULT: PASSED" >> VideoDL-test-log.txt
+          tail -5 VideoDL-test-log.txt
+
+      - name: Publish test log
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-log
+          name: Latest test log
+          prerelease: true
+          files: VideoDL-test-log.txt
+
+      - name: Fail if test failed
+        run: '[ ! -f test-failed ]'
+
+      # 테스트 통과했을 때만 폰용 APK 빌드/배포
+      - name: Build phone APK
+        run: |
+          gradle assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk VideoDL.apk
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: VideoDL build ${{ github.run_number }}
+          name: VideoDL build ${{ github.run_number }} (테스트 통과)
+          make_latest: true
           files: VideoDL.apk

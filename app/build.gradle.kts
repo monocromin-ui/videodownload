@@ -11,9 +11,13 @@ android {
         applicationId = "com.goodload.videodl"
         minSdk = 29
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
-        ndk { abiFilters += "arm64-v8a" }   // 갤럭시 등 최신 폰용 (용량 절약)
+        versionCode = 5
+        versionName = "1.4"
+        ndk {
+            abiFilters += "arm64-v8a"   // 갤럭시 등 최신 폰용 (용량 절약)
+            if (project.hasProperty("emu")) abiFilters += "x86_64"   // 에뮬레이터 테스트용
+        }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // 고정 서명키: 빌드가 바뀌어도 기존 앱 위에 업데이트 설치 가능
@@ -39,4 +43,6 @@ android {
 dependencies {
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.4")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

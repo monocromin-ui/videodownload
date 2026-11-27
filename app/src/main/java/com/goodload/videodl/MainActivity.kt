@@ -17,7 +17,6 @@ import android.widget.TextView
 import android.widget.Toast
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import java.io.File
 import kotlin.concurrent.thread
 
@@ -103,21 +102,7 @@ class MainActivity : Activity() {
         thread {
             val dir = File(cacheDir, "dl").apply { deleteRecursively(); mkdirs() }
             try {
-                val req = YoutubeDLRequest(url)
-                req.addOption("-o", dir.absolutePath + "/%(title).150B.%(ext)s")
-                req.addOption("--no-playlist")
-                // 일부 망(IPv6/사설 DNS)에서 googlevideo 주소 조회 실패(Errno 7) 방지
-                req.addOption("--force-ipv4")
-                req.addOption("--retries", "3")
-                req.addOption("--fragment-retries", "3")
-                req.addOption("--verbose")
-                if (audio) {
-                    req.addOption("-x")
-                    req.addOption("--audio-format", "mp3")
-                } else {
-                    req.addOption("-f", "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b")
-                    req.addOption("--merge-output-format", "mp4")
-                }
+                val req = Downloader.buildRequest(applicationContext, url, audio, dir)
 
                 YoutubeDL.getInstance().execute(req, "job") { p, eta, _ ->
                     ui {
