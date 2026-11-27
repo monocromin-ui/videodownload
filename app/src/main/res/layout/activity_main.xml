@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="VideoDL" android:textSize="28sp" android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <EditText
+            android:id="@+id/url"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="동영상 링크 붙여넣기"
+            android:inputType="textUri" android:singleLine="true" />
+
+        <CheckBox
+            android:id="@+id/audioOnly"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="음악만 받기 (mp3)" android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/download"
+            android:layout_width="match_parent" android:layout_height="56dp"
+            android:text="다운로드" android:textSize="18sp" android:layout_marginTop="12dp" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            style="@android:style/Widget.DeviceDefault.ProgressBar.Horizontal"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="100" android:visibility="gone" android:layout_marginTop="16dp" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:textSize="15sp" android:textIsSelectable="true" />
+    </LinearLayout>
+</ScrollView>
