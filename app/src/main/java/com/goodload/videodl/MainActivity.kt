@@ -100,6 +100,10 @@ class MainActivity : Activity() {
                 val req = YoutubeDLRequest(url)
                 req.addOption("-o", dir.absolutePath + "/%(title).150B.%(ext)s")
                 req.addOption("--no-playlist")
+                // 일부 망(IPv6/사설 DNS)에서 googlevideo 주소 조회 실패(Errno 7) 방지
+                req.addOption("--force-ipv4")
+                req.addOption("--retries", "3")
+                req.addOption("--fragment-retries", "3")
                 if (audio) {
                     req.addOption("-x")
                     req.addOption("--audio-format", "mp3")
