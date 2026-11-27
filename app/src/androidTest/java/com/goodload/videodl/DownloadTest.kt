@@ -50,5 +50,17 @@ class DownloadTest {
 
     // 2) 다운로드 → 저장 → ffmpeg(mp3 변환) 전체 흐름 검증용 일반 영상
     @Test fun genericVideo() = run("https://www.w3schools.com/html/mov_bbb.mp4", false)
+    // 3) 실제 앱과 같은 경로: 포그라운드 서비스로 받고 Download/VideoDL 에 저장
+    @Test fun serviceDownload() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        ctx.startForegroundService(android.content.Intent(ctx, DownloadService::class.java)
+            .putExtra("url", "https://www.w3schools.com/html/mov_bbb.mp4").putExtra("audio", false))
+        val end = System.currentTimeMillis() + 5 * 60_000
+        while (System.currentTimeMillis() < end && !DownloadService.state.done) Thread.sleep(500)
+        val s = DownloadService.state
+        log("SERVICE RESULT: ${s.text}\n${s.log}")
+        assertTrue("service failed: ${s.text}", s.done && !s.failed)
+    }
+
     @Test fun genericAudio() = run("https://www.w3schools.com/html/mov_bbb.mp4", true)
 }

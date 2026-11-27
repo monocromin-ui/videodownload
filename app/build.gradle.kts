@@ -11,8 +11,8 @@ android {
         applicationId = "com.goodload.videodl"
         minSdk = 29
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 10
+        versionName = "2.0"
         ndk {
             abiFilters += "arm64-v8a"   // 갤럭시 등 최신 폰용 (용량 절약)
             if (project.hasProperty("emu")) abiFilters += "x86_64"   // 에뮬레이터 테스트용
